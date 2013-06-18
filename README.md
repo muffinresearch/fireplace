@@ -200,65 +200,76 @@ Snippet:
 
     http {
         ...
+
+        # Change this to update where your fireplace is running.
+        upstream fireplace {
+            server localhost:8675;
+        }
+
+        # Change this to reflect where your zamboni is running.
+        upstream zamboni {
+            server localhost:8002;
+        }
+
+        # Change this to reflect where your webpay is running.
+        # Optional - only needed if you're testing payments.
+        upstream webpay {
+            server localhost:9000;
+        }
+
         server {
+
             # Listening on port 80 is nice but you have to start nginx
             # with the right permissions.
             listen       80 default;
+
             # Set a host name. You also have to alias this host to
             # 127.0.0.1 in /etc/hosts
             server_name  fireplace.local;
 
+            location / {
+                # Default to fireplace.
+                proxy_pass http://fireplace;
+                proxy_set_header Host $host;
+            }
+
             location /mozpay/ {
                 # This is an optional alias to your local Webpay server
                 # so you can process payments.
-                proxy_pass http://localhost:8000;
+                proxy_pass http://webpay;
                 proxy_set_header Host $host;
             }
 
-            location / {
-                # This is an alias to the local Fireplace server (damper)
-                # to mimic a hosted Fireplace.
-                proxy_pass http://localhost:8675;
+            # Conditionally pass Zamboni urls to Zamboni.
+            location  ~ '^/(admin|api|developers|jsi18n\.js|login|logout|lookup|reviewers|services|tmp)' {
+                proxy_pass http://zamboni;
                 proxy_set_header Host $host;
             }
 
-            location /developers/ {
-                # This is an optional alias to your local Zamboni so
-                # you can use the DevHub.
-                proxy_pass http://localhost:8002;
-                proxy_set_header Host $host;
-            }
-
+            # Conditionally handle /users for both Zamboni and Fireplace.
             location /users {
-                # Allows login to work on the devhub.
                 proxy_set_header Host $host;
-                if ($http_referer ~ '^http://[^/]*?/developers') {
-                    proxy_pass http://localhost:8002;
+                if ($http_referer ~ '^http://[^/]*?/(developers|reviewers|login\?to=/(reviewers|developers))') {
+                    proxy_pass http://zamboni;
                     break;
                 }
-                proxy_pass http://localhost:8675;
+                proxy_pass http://fireplace;
             }
 
+            # Conditionally handle media depending on where we are using referer (sic) header.
             location /media {
-                # Conditional proxying of media for devhub (Zamboni) and fireplace.
                 proxy_set_header Host $host;
-                if ($http_referer ~ '^http://[^/]*?/(developers|media/css/mkt|media/css/devreg)') {
-                    proxy_pass http://localhost:8002;
+                if ($http_referer ~ '^http://[^/]*?/(admin|developers|login\?to=/(reviewers|developers)|lookup|media/css/(devecosystem|devreg|gaia|mkt)|reviewers|services)') {
+                    proxy_pass http://zamboni;
                     break;
                 }
-                proxy_pass http://localhost:8675;
+                if ($http_referer  ~ '^http://[^/]*?/mozpay') {
+                    proxy_pass http://webpay;
+                    break;
+                }
+                proxy_pass http://fireplace;
             }
 
-            location /tmp {
-                # Serve uploaded images from Zamboni.
-                proxy_set_header Host $host;
-                proxy_pass http://localhost:8002;
-            }
-
-            location /jsi18n.js {
-                # This serves i18n from Zamboni.
-                proxy_set_header Host $host;
-                proxy_pass http://localhost:8002;
-            }
         }
+
     }
