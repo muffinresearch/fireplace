@@ -183,6 +183,19 @@ function(_) {
         false
     );
 
+    function setVpHeightAndroid() {
+        // Workaround to prevent zooming on short pages when keyboard
+        // is lowered (972532, 976531)
+        var scrollableBodyHeight = z.win.height() + 200;
+        console.log('[Android] Setting min-height to: ' + scrollableBodyHeight);
+        z.body.css('min-height', scrollableBodyHeight);
+    }
+
+    if (capabilities.firefoxAndroid) {
+        z.doc.on('saferesize', setVpHeightAndroid);
+        setVpHeightAndroid();
+    }
+
     require('consumer_info').promise.done(function() {
         console.log('Triggering initial navigation');
         if (!z.spaceheater) {
